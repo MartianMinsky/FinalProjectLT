@@ -317,7 +317,33 @@ def printAns(results, values, Qtype, answerSpot):
             print(i[answerSpot]['value'])
         return True
 
-def main(argv):
+def main(line):
+    try:
+        values, Qtype = questionAnalysis(line)
+    except Exception as e:
+        traceback.print_exc()
+    else:
+        for combo in itertools.product(values['relation'], values['entity']):
+            print("\ntrying combo: \nrel: {} - {} \nent: {} - {}".format(
+                    combo[0]["id"], combo[0]["url"],
+                    combo[1]["id"], combo[1]["url"]))
+
+            query, answerSpot = queryType(combo, Qtype)
+            results = runQuery(query)
+            ansGood = printAns(results, values, Qtype, answerSpot)
+
+            if (results and ansGood): # found good answer.
+                break
+            else:
+                print("combo failed")
+
+        # if no answer can be found, and have tried all combos
+        if (not results):
+            print("Answer not found.")
+        elif (ansGood == False):
+            print("No")
+
+if __name__ == '__main__':
     questions = {
         1: "What is the mass of the human brain?",
         2: "What is the charge of an electron?",
@@ -338,65 +364,18 @@ def main(argv):
 
     if (len(sys.argv) == 2) and (sys.argv[1].isdigit()):
         line = questions.get(int(sys.argv[1]))
-        try:
-            values, Qtype = questionAnalysis(line)
-        except Exception as e:
-            traceback.print_exc()
-        else:
-            for combo in itertools.product(values['relation'], values['entity']):
-                print("\ntrying combo: \nrel: {} - {} \nent: {} - {}".format(
-                        combo[0]["id"], combo[0]["url"],
-                        combo[1]["id"], combo[1]["url"]))
-
-                query, answerSpot = queryType(combo, Qtype)
-                results = runQuery(query)
-                ansGood = printAns(results, values, Qtype, answerSpot)
-
-                if (results and ansGood):
-                    break
-                else:
-                    print("combo failed")
-
-            if (not results):
-                print("Answer not found.")
-            elif (ansGood == False):
-                print("No")
-
-    # elif line is a number 1-10, then select that question.
+        main(line)
     else:
         print("\n-- \tType your question!\t --")
         for line in sys.stdin:
             line = line.rstrip()
+            if (line.isdigit() and (int(line) > 0 and int(line) <= 10)):
+                line = questions.get(int(line))
+                print(line)
 
-            try:
-                values, Qtype = questionAnalysis(line)
-            except Exception as e:
-                traceback.print_exc()
-            else:
-                for combo in itertools.product(values['relation'], values['entity']):
-                    print("\ntrying combo: \nrel: {} - {} \nent: {} - {}".format(
-                            combo[0]["id"], combo[0]["url"],
-                            combo[1]["id"], combo[1]["url"]))
-
-                    query, answerSpot = queryType(combo, Qtype)
-                    results = runQuery(query)
-                    ansGood = printAns(results, values, Qtype, answerSpot)
-
-                    if (results and ansGood):
-                        break
-                    else:
-                        print("combo failed")
-
-                if (not results):
-                    print("Answer not found.")
-                elif (ansGood == False):
-                    print("No")
-
+            main(line)
 
             print("-- \tType your question!\t --")
-
-if __name__ == '__main__':
-    main(sys.argv)
 
 '''
 ToDo:
