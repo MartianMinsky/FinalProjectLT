@@ -1,0 +1,52 @@
+ToDo:
+
+Bugs:
+  - Question 2: What is the temperature of the Sun? Recognises Sunday, instead of Sun.
+
+Improvements/Ideas:
+WORKING - 1 Keep an array of certain length of the matches. That way, can increase chance
+    of finding the right relation and entity. If no answer comes back, try next combo.
+      > if the array is of length 3, there are 3*2 = 6 combos to try.
+        will slow down, but it's not about being quick, it's about being able to answer.
+2 Merge results from WikiDataAPI and wikidataQuery, to try even more things?
+3 Make wikidataQuery not only take the first match it finds, but a set amount (like wikidataAPI).
+
+Need to Fix:
+
+Notes:
+* Access id of a wikiDataAPI result with entity['id']
+* values (the matches to wikiDataAPI) are stored in a dict, so anything about them can be accessed:
+      the dict: values = {
+                  "relation" : relationAPI,
+                  "entity" : entityFinal,
+                  "entity2" : entity2API if (entity2API is not None) else None
+              }
+  fields from wikidataAPI are:
+    - id
+    - title
+    - pageid
+    - repository
+    - url
+    - datatype
+    - concepturi
+    - label
+    - description
+    - match : {type
+               language
+               text}
+    - aliases
+
+  fields from wikiDataQuery are:
+    - id
+    - title
+    - url
+    - concepturi
+
+
+* Now using the en_core_web_lg 'large' model
+
+Workflow:
+1. values, Qtype = questionAnalysis(line)
+2. query, answerSpot = queryType(values, Qtype)
+3. results = runQuery(query, answerSpot)
+4. printAns(results, values, Qtype)
