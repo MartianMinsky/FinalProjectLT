@@ -100,7 +100,7 @@ def questionAnalysis(line):
     nlp = spacy.load('en_core_web_sm')
     result = nlp(line)
 
-    # spacy.displacy.serve(result, style='dep')
+    spacy.displacy.serve(result, style='dep')
 
     relation = None
     entity = None
@@ -111,7 +111,9 @@ def questionAnalysis(line):
         # print(token.text, token.dep_, token.pos_, token.head.dep_)
         # What is the X of Y? type
         if token.dep_ == 'pobj':
-            if (token.head.dep_ == 'prep') and ((token.head.head.dep_ == 'nsubj') or (token.head.head.dep_ == 'attr')):
+            if (token.head.dep_ == 'prep') and ((token.head.head.dep_ == 'nsubj') or
+                                                (token.head.head.dep_ == 'attr') or
+                                                (token.head.head.dep_ == 'dobj')):
                 if (token.head.head.head.dep_ == 'ROOT'):
                     Qtype = "What is the X of Y"
                     relation = extractEntRel(token.head.head.text, result.noun_chunks)
@@ -120,11 +122,16 @@ def questionAnalysis(line):
 
         # Questions of the type Who VERB SUBJ?
         elif (token.dep_ == 'dobj'):
-            if (token.head.dep_ == 'ROOT') and (token.head.pos_ == 'VERB'):
-                Qtype = "Who VERB SUBJ"
-                relation = token.head.text
-                entity = token.text
-                break
+            for othertoken in result:
+                if othertoken.pos_ == "PRON":
+                    Qtype = "What did ENTITY VERB"
+                    break
+            if Qtype == "What did ENTITY VERB":
+                if (token.head.dep_ == 'ROOT') and (token.head.pos_ == 'VERB'):
+                    Qtype = "Who VERB SUBJ"
+                    relation = token.head.text
+                    entity = token.text
+                    break
 
         # Questions of the type What did ENTITY VERB?
         elif (token.pos_ == 'PROPN') and (token.head.dep_ == 'ROOT'):
@@ -203,27 +210,53 @@ def questionAnalysis(line):
     entity2API = []
     entity2Query = []
 
-    try:
+    try: # attempt to map relation.
         relationAPI = wikiDataAPI(relation, 'relation')
-
-        entityAPI = wikiDataAPI(entity, 'entity')
-
-        if entity2 is not None:
-            entity2API = wikiDataAPI(entity2, 'entity')
-            entity2Query = wikiDataQuery(entity2)
-
-        entityQuery = wikiDataQuery(entity)
-
     except Exception:
-        if (not relationAPI):
-            if (not entityAPI) and (not entityQuery):
-                raise Exception('Could not map Entity.')
+        raise Exception('Could not map relation.')
+    else:
+        try: # attempt to map entity w/ wikiDataAPI()
+            entityAPI = wikiDataAPI(entity, 'entity')
+        except Exception:
+            raise Exception('Could not map entity using API.')
 
-            if ((entity2 is not None) and
-               (not entity2API) and (not entity2Query)):
-                raise Exception('Could not map Entity2.')
-        else:
-            raise Exception('Could not map relation.')
+        try: # attempt to map entity w/ wikiDataQuery()
+            entityQuery = wikiDataQuery(entity)
+        except Exception:
+            raise Exception('Could not map entity using Query.')
+
+    if entity2 is not None:
+        try: # attempt to map entity2 w/ wikiDataAPI()
+            entity2API = wikiDataAPI(entity2, 'entity')
+        except Exception:
+            raise Exception('Could not map entity2 using API.')
+
+        try: # attempt to map entity2 w/ wikiDataQuery()
+            entity2Query = wikiDataQuery(entity2)
+        except Exception:
+            raise Exception('Could not map entity2 using Query.')
+
+    # try:
+    #     relationAPI = wikiDataAPI(relation, 'relation')
+    #
+    #     entityAPI = wikiDataAPI(entity, 'entity')
+    #
+    #     if entity2 is not None:
+    #         entity2API = wikiDataAPI(entity2, 'entity')
+    #         entity2Query = wikiDataQuery(entity2)
+    #
+    #     entityQuery = wikiDataQuery(entity)
+    #
+    # except Exception:
+    #     if (not relationAPI):
+    #         if (not entityAPI) and (not entityQuery):
+    #             raise Exception('Could not map Entity.')
+    #
+    #         if ((entity2 is not None) and
+    #            (not entity2API) and (not entity2Query)):
+    #             raise Exception('Could not map Entity2.')
+    #     else:
+    #         raise Exception('Could not map relation.')
 
     values = {
         "relation" : relationAPI,
@@ -313,8 +346,11 @@ def printAns(results, values, Qtype, answerSpot):
                     return True
         return False
     else:
+        answ = []
         for i in results:
-            print(i[answerSpot]['value'])
+            answ.append(i[answerSpot]['value'])
+            # print(i[answerSpot]['value'], end=' ')
+        print(answ)
         return True
 
 def main(line):
@@ -349,9 +385,9 @@ if __name__ == '__main__':
         2: "What is the charge of an electron?",
         3: "Name all founders of the United Nations",
         4: "Is calculus a theory?",
-        5: "Did Newton discover penicilin?",
-        6: "How many nobel prizes has Marie Curie won?",
-        7: "Is HTML a markup language?",
+        5: "Is HTML a markup language?",
+        6: "Did Newton discover penicilin?",
+        7: "How many nobel prizes has Marie Curie won?",
         8: "What is the name of the biggest planet in our Solar system?",
         9: "When did Neil Armstrong die?",
         10: "What is the temperature at the center of the Sun?"

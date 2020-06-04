@@ -3,8 +3,16 @@ ToDo:
 Bugs:
 
 Improvements/Ideas:
+WORKING  - Change try-catch block in questionAnalysis() so that it doesn't fail if just one thing goes wrong
+    > multiple try-catch blocks, one for relation, one for entity, and last for entity2?
 
 Need to Fix:
+  Question Types:
+    - Did X do Y? (Yes/No question.) [Did Newton discover penicillin?]
+    - How many Xs VERB Y VERB? (count question) [How many nobel prizes has Marie Curie won?]
+    - Biggest/Smallest questions???
+    - When/What/Why/Who/Where did X Y? [When did Neil Armstrong die?]
+    - Qualified statements questions [What is the temperature at THE CENTER of the sun]
 
 Notes:
 * Access id of a wikiDataAPI result with entity['id']
