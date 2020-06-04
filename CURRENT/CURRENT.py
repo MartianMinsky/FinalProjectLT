@@ -27,7 +27,7 @@ def wikiDataAPI(item, type):
     params['search'] = item
     json = requests.get(url,params).json()
 
-    if (not json['search']):
+    if (not json):
         raise Exception('Did not find property or entity using API!')
     elif (len(json['search']) < API_RESULT_LEN):
         nRes = len(json['search'])
@@ -97,10 +97,10 @@ def extractEntRel(text, noun_chunks):
 # Responsible for understanding the quesion type and mapping the entities/relations
 # found, to a wikidata Q-Number.
 def questionAnalysis(line):
-    nlp = spacy.load('en_core_web_sm')
+    nlp = spacy.load('en_core_web_lg')
     result = nlp(line)
 
-    spacy.displacy.serve(result, style='dep')
+    # spacy.displacy.serve(result, style='dep')
 
     relation = None
     entity = None
@@ -108,7 +108,7 @@ def questionAnalysis(line):
     Qtype = None
 
     for token in result:
-        # print(token.text, token.dep_, token.pos_, token.head.dep_)
+        print(token.text, token.lemma_, token.dep_, token.pos_, token.head.dep_)
         # What is the X of Y? type
         if token.dep_ == 'pobj':
             if (token.head.dep_ == 'prep') and ((token.head.head.dep_ == 'nsubj') or
@@ -133,6 +133,66 @@ def questionAnalysis(line):
                     entity = token.text
                     break
 
+        # Questions of the type Did ENTITY1 RELATION ENTITY2 (Yes/No)
+        elif (token.dep_ == 'ROOT' and token.pos_ == 'VERB'): # token is ROOT and a VERB.
+            nsubj = aux = dobj = False
+            relation = token.lemma_
+            for child in token.children:
+                if (child.dep_ == 'nsubj'):
+                    entity2 = extractEntRel(child.text, result.noun_chunks)
+                    nsubj = True
+                elif (child.dep_ == 'aux'):
+                    aux = True
+                elif (child.dep_ == 'dobj') or (child.dep_ == 'attr'):
+                    entity = extractEntRel(child.text, result.noun_chunks)
+                    dobj = True
+            print("nsubj: {}, aux: {}, dobj: {}".format(nsubj, aux, dobj))
+            if (nsubj and aux and dobj):
+                Qtype = "Did ENTITY1 RELATION ENTITY2"
+                break
+
+        # Questions of the type Is ENTITY a ENTITY (Yes/No) (Ex: Is HTML a markup language)
+        elif (token.dep_ == 'ROOT' and token.lemma_ == 'be'):
+            attr = nsubj = False
+            relation = token.lemma_
+            for child in token.children:
+                if (child.dep_ == 'nsubj'):
+                    entity = extractEntRel(child.text, result.noun_chunks)
+                    nsubj = True
+                elif (child.dep_ == 'attr'):
+                    entity2 = extractEntRel(child.text, result.noun_chunks)
+                    attr = True
+            # print("nsubj: {}, attr: {}".format(nsubj, attr))
+            if (nsubj and attr):
+                Qtype = "Is ENTITY a ENTITY"
+                break
+
+        # Questions of the type How many Xs VERB Y VERB?
+        elif (token.dep_ == 'advmod') and (token.head.dep_ == 'amod'):
+            if ((token.head.head.dep_ == 'nsubj') or (token.head.head.dep_ == 'dobj')) and (token.head.head.head.head.dep_ == 'ROOT'):
+
+                Qtype = "How many Xs VERB Y VERB"
+                relation = extractEntRel(token.head.head.text, result.noun_chunks)
+
+                entityLemmas = []
+
+                root = [token1 for token1 in result if token1.head == token1][0]
+                for child in root.children:
+
+                #
+                # for tok in result:
+                #     if to
+                #     print(root.text)
+                    if (tok.dep_ == 'nsubj') and (tok.head.dep_ == 'ROOT'):
+                        # for i in tok.head.children:
+                        #     print(i.text)
+                        if (len(list(tok.children)) > 0) and (list(tok.children)[0].dep_ == 'compound'):
+                            entityLemmas.append(list(tok.children)[0].lemma_)
+                        entityLemmas.append(tok.lemma_)
+                        break
+                entity = " ".join(entityLemmas)
+                break
+
         # Questions of the type What did ENTITY VERB?
         elif (token.pos_ == 'PROPN') and (token.head.dep_ == 'ROOT'):
             for othertoken in result:
@@ -150,59 +210,19 @@ def questionAnalysis(line):
                         relation = token.head.lemma_
                         break
 
-        # Questions of the type Is ENTITY a ENTITY (Ex: Is HTML a markup language)
-        elif (token.dep_ == 'attr') and (token.pos_ == 'NOUN') and (token.head.dep_ == 'ROOT'):
-            Qtype = "Is ENTITY a ENTITY"
-            for othertoken in result:
-                if othertoken.pos_ == "PRON":
-                    Qtype = None
-                    break
-            if Qtype == "Is ENTITY a ENTITY":
-                relation = token.head.text
-                entity2 = extractEntRel(token.text, result.noun_chunks)
-
-                for othertoken in result:
-                    if othertoken.dep_ == 'nsubj':
-                        entityLemmas = []
-                        for child in othertoken.children:
-                            entityLemmas.append(child.lemma_)
-                        entityLemmas.append(othertoken.lemma_)
-                        entity = " ".join(entityLemmas)
-                            # break
-                        break
-                break
-
-        # Questions of the type How many Xs VERB Y VERB?
-        elif (token.dep_ == 'advmod') and (token.head.dep_ == 'amod'):
-            if ((token.head.head.dep_ == 'nsubj') or (token.head.head.dep_ == 'dobj')) and (token.head.head.head.head.dep_ == 'ROOT'):
-
-                Qtype = "How many Xs VERB Y VERB"
-                relation = extractEntRel(token.head.head.text, result.noun_chunks)
-
-                entityLemmas = []
-
-                root = [token for token in result if token.head == token][0]
-                for child in root.children:
-
-                #
-                # for tok in result:
-                #     if to
-                #     print(root.text)
-                    if (tok.dep_ == 'nsubj') and (tok.head.dep_ == 'ROOT'):
-                        # for i in tok.head.children:
-                        #     print(i.text)
-                        if (len(list(tok.children)) > 0) and (list(tok.children)[0].dep_ == 'compound'):
-                            entityLemmas.append(list(tok.children)[0].lemma_)
-                        entityLemmas.append(tok.lemma_)
-                        break
-                entity = " ".join(entityLemmas)
-                break
-
     if Qtype == None:
         raise Exception("Question type not recognised.")
 
     print("relation: {}\nentity: {}\nentity2: {}\nQtype: {}\n-----------".format(
             relation, entity, entity2, Qtype))
+
+    # hardcoding things that won't get recognised
+    BElemmasToHardCode = [
+        "become", "be"
+    ]
+
+    if (relation in BElemmasToHardCode):
+        relation = "is"
 
     relationAPI = []
     entityAPI = []
@@ -235,28 +255,6 @@ def questionAnalysis(line):
             entity2Query = wikiDataQuery(entity2)
         except Exception:
             raise Exception('Could not map entity2 using Query.')
-
-    # try:
-    #     relationAPI = wikiDataAPI(relation, 'relation')
-    #
-    #     entityAPI = wikiDataAPI(entity, 'entity')
-    #
-    #     if entity2 is not None:
-    #         entity2API = wikiDataAPI(entity2, 'entity')
-    #         entity2Query = wikiDataQuery(entity2)
-    #
-    #     entityQuery = wikiDataQuery(entity)
-    #
-    # except Exception:
-    #     if (not relationAPI):
-    #         if (not entityAPI) and (not entityQuery):
-    #             raise Exception('Could not map Entity.')
-    #
-    #         if ((entity2 is not None) and
-    #            (not entity2API) and (not entity2Query)):
-    #             raise Exception('Could not map Entity2.')
-    #     else:
-    #         raise Exception('Could not map relation.')
 
     values = {
         "relation" : relationAPI,
@@ -313,6 +311,7 @@ def queryType(combo, Qtype):
     queryTypes = {
         "What is the X of Y" : (createRelationQuery(combo[0]['id'], combo[1]['id']), 'answerLabel'),
         "Who VERB SUBJ" : (createRelationQuery(combo[0]['id'], combo[1]['id']), 'answerLabel'),
+        "Did ENTITY1 RELATION ENTITY2" : (createRelationQuery(combo[0]['id'], combo[1]['id']), 'answerLabel'),
         "What did ENTITY VERB" : (createRelationQuery(combo[0]['id'], combo[1]['id']), 'answerLabel'),
         "Is ENTITY a ENTITY" : (createRelationQuery(combo[0]['id'], combo[1]['id']), 'answerLabel'),
         "How many Xs VERB Y VERB" : (createQuantityQuery(combo[0]['id'], combo[1]['id']), 'count')
@@ -338,7 +337,7 @@ def runQuery(query):
     return data['results']['bindings']
 
 def printAns(results, values, Qtype, answerSpot):
-    if (Qtype == "Is ENTITY a ENTITY"):
+    if (Qtype == "Is ENTITY a ENTITY") or (Qtype == "Did ENTITY1 RELATION ENTITY2"):
         for item in values['entity2']:
             for ans in results:
                 if ans['answer']['value'] == item['concepturi']:
@@ -374,7 +373,7 @@ def main(line):
                 print("combo failed")
 
         # if no answer can be found, and have tried all combos
-        if (not results):
+        if (results is None):
             print("Answer not found.")
         elif (ansGood == False):
             print("No")
@@ -386,7 +385,7 @@ if __name__ == '__main__':
         3: "Name all founders of the United Nations",
         4: "Is calculus a theory?",
         5: "Is HTML a markup language?",
-        6: "Did Newton discover penicilin?",
+        6: "Did Alexander Fleming invent penicillin?",
         7: "How many nobel prizes has Marie Curie won?",
         8: "What is the name of the biggest planet in our Solar system?",
         9: "When did Neil Armstrong die?",

@@ -3,12 +3,14 @@ ToDo:
 Bugs:
 
 Improvements/Ideas:
-WORKING  - Change try-catch block in questionAnalysis() so that it doesn't fail if just one thing goes wrong
+DONE  - Change try-catch block in questionAnalysis() so that it doesn't fail if just one thing goes wrong
     > multiple try-catch blocks, one for relation, one for entity, and last for entity2?
 
 Need to Fix:
   Question Types:
-    - Did X do Y? (Yes/No question.) [Did Newton discover penicillin?]
+    - Did X VERB Y? (Yes/No question.) [Did Newton discover penicillin?]
+      > Did X Z Y?
+      > Did X Y?
     - How many Xs VERB Y VERB? (count question) [How many nobel prizes has Marie Curie won?]
     - Biggest/Smallest questions???
     - When/What/Why/Who/Where did X Y? [When did Neil Armstrong die?]
