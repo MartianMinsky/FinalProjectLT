@@ -411,36 +411,3 @@ if __name__ == '__main__':
             main(line)
 
             print("-- \tType your question!\t --")
-
-'''
-ToDo:
-
-Bugs:
-- relationId referenced before assignment for (for example: What are the components of air?)
-- When answer returns empty it's because the question of type Is X Y?'s answer is false.
-DONE - if answer is empty return "answer not found"?
-- Is atropa belladonna a poisonous plant?
-    -> tuple index out of range
-
-Improvements:
-- What happened to looking into the wikidata library?
-DONE - make wikiDataAPI return an array with all the info (id, label and other shit?), rather than having 2 identical functs.
-DONE - questionAnalysis() only returns the Q-ids of the entity(s) and the relation and the Q's type.
-DONE - queryType() is responsible for calling the right query-making function and also depending on
-       the query type, the answerSpot (name of field in data['head']['vars'], which contains the answer. ).
-DONE - runQuery() only returns the array containing the answer.
-DONE - printAns() makes sure the answer type to be returned is correct (yes/no OR the actual answer)
-DONE - Need to disambiguate for entity2? (only yes/no questions.)
-
-Need to Fix:
-DONE - Around line 196: entityFinal (which is supposed to be a dict) is mapped to the Q-Number returned from wikiDataQuery()
-
-Notes:
-* Access id of a wikiDataAPI result with entity['id']
-* values (the matches to wikiDataAPI) are stored in a dict, so anything about them can be accessed:
-      the dict: values = {
-                  "relation" : relationAPI,
-                  "entity" : entityFinal,
-                  "entity2" : entity2API if (entity2API is not None) else None
-              }
-'''
