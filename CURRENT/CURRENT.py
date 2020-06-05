@@ -27,7 +27,7 @@ def wikiDataAPI(item, type):
     params['search'] = item
     json = requests.get(url,params).json()
 
-    if (not json):
+    if (not json['search']):
         raise Exception('Did not find property or entity using API!')
     elif (len(json['search']) < API_RESULT_LEN):
         nRes = len(json['search'])
@@ -36,7 +36,6 @@ def wikiDataAPI(item, type):
 
     return json['search'][0:nRes]
 
-# returns only id.
 def wikiDataQuery(item):
     query = '''
     SELECT ?val1 WHERE {
@@ -58,8 +57,14 @@ def wikiDataQuery(item):
         results = []
         for item in range(0, nRes):
             uri = data['results']['bindings'][item]['val1']['value']
+
             # only want the entity Q-number.
-            id = re.search(r'Q\d+$', uri).group()
+            srch = re.search(r'Q\d+$', uri)
+            # avoids all matches for relations (P-values)
+            if (srch is not None):
+                id = srch.group()
+            else:
+                continue
 
             result = {
                 'id': id,
@@ -76,7 +81,7 @@ def wikiDataQuery(item):
 # Function used to accept strings as part of an entity(Ent) or a relation(Rel).
 def extractEntRel(text, noun_chunks):
     acceptablePOS = [
-        'NOUN', 'PROPN', 'ADJ', 'VERB'
+        'NOUN', 'PROPN', 'ADJ', 'VERB', 'NUM'
     ]
 
     hardCodeRemovals = [
@@ -85,12 +90,20 @@ def extractEntRel(text, noun_chunks):
 
     stringLemmas = []
     for nounChunk in noun_chunks:
+        # print(nounChunk.text)
         if text in nounChunk.text:
             for w in nounChunk:
                 if (w.text.lower() not in hardCodeRemovals) and (w.pos_ in acceptablePOS):
                     stringLemmas.append(w.lemma_)
             string = " ".join(stringLemmas)
             break
+
+    # NEED list acceptableDEP
+    # for child in token.children:
+    #     if (child.pos_ in acceptablePOS):
+    #         stringLemmas.append(w.lemma_)
+    # string = " ".join(stringLemmas)
+    # break
 
     return string
 
@@ -100,15 +113,15 @@ def questionAnalysis(line):
     nlp = spacy.load('en_core_web_lg')
     result = nlp(line)
 
-    # spacy.displacy.serve(result, style='dep')
-
-    relation = None
-    entity = None
-    entity2 = None
-    Qtype = None
+    spacy.displacy.serve(result, style='dep')
 
     for token in result:
-        print(token.text, token.lemma_, token.dep_, token.pos_, token.head.dep_)
+        relation = None
+        entity = None
+        entity2 = None
+        Qtype = None
+
+        # print(token.text, token.lemma_, token.dep_, token.pos_, token.head.dep_)
         # What is the X of Y? type
         if token.dep_ == 'pobj':
             if (token.head.dep_ == 'prep') and ((token.head.head.dep_ == 'nsubj') or
@@ -134,10 +147,11 @@ def questionAnalysis(line):
                     break
 
         # Questions of the type Did ENTITY1 RELATION ENTITY2 (Yes/No)
-        elif (token.dep_ == 'ROOT' and token.pos_ == 'VERB'): # token is ROOT and a VERB.
+        elif (token.lemma_ == 'do' and token.pos_ == 'AUX'): # token is starting "Did" ... .
             nsubj = aux = dobj = False
             relation = token.lemma_
-            for child in token.children:
+            root = [toks for toks in result if toks.head == toks][0]
+            for child in root.children:
                 if (child.dep_ == 'nsubj'):
                     entity2 = extractEntRel(child.text, result.noun_chunks)
                     nsubj = True
@@ -146,51 +160,48 @@ def questionAnalysis(line):
                 elif (child.dep_ == 'dobj') or (child.dep_ == 'attr'):
                     entity = extractEntRel(child.text, result.noun_chunks)
                     dobj = True
-            print("nsubj: {}, aux: {}, dobj: {}".format(nsubj, aux, dobj))
+            # print("nsubj: {}, aux: {}, dobj: {}".format(nsubj, aux, dobj))
             if (nsubj and aux and dobj):
                 Qtype = "Did ENTITY1 RELATION ENTITY2"
                 break
 
         # Questions of the type Is ENTITY a ENTITY (Yes/No) (Ex: Is HTML a markup language)
         elif (token.dep_ == 'ROOT' and token.lemma_ == 'be'):
-            attr = nsubj = False
-            relation = token.lemma_
+            pron = True
+            for othertoken in result:
+                if othertoken.pos_ == "PRON":
+                    pron = False
+                    break
+            if (pron):
+                attr = nsubj = False
+                relation = token.lemma_
+                for child in token.children:
+                    if (child.dep_ == 'nsubj'):
+                        entity = extractEntRel(child.text, result.noun_chunks)
+                        nsubj = True
+                    elif (child.dep_ == 'attr'):
+                        entity2 = extractEntRel(child.text, result.noun_chunks)
+                        attr = True
+                # print("nsubj: {}, attr: {}".format(nsubj, attr))
+                if (nsubj and attr):
+                    Qtype = "Is ENTITY a ENTITY"
+                    break
+
+        # Questions of the type How many Xs VERB Y VERB?
+        elif ((token.dep_ == 'ROOT') and (re.match(r'^how many', line, re.I) is not None)):
+            aux = nsubj1 = nsubj2 = False
             for child in token.children:
                 if (child.dep_ == 'nsubj'):
                     entity = extractEntRel(child.text, result.noun_chunks)
-                    nsubj = True
-                elif (child.dep_ == 'attr'):
-                    entity2 = extractEntRel(child.text, result.noun_chunks)
-                    attr = True
-            # print("nsubj: {}, attr: {}".format(nsubj, attr))
-            if (nsubj and attr):
-                Qtype = "Is ENTITY a ENTITY"
-                break
-
-        # Questions of the type How many Xs VERB Y VERB?
-        elif (token.dep_ == 'advmod') and (token.head.dep_ == 'amod'):
-            if ((token.head.head.dep_ == 'nsubj') or (token.head.head.dep_ == 'dobj')) and (token.head.head.head.head.dep_ == 'ROOT'):
-
+                    nsubj1 = True
+                elif (child.dep_ == 'aux'):
+                    aux = True
+                    childChild = [child for child in child.children if child.dep_ == 'nsubj'][0]
+                    relation = extractEntRel(childChild.text, result.noun_chunks)
+                    nsubj2 = True
+            print("aux: {} nsubj1: {} nsubj2: {}".format(aux, nsubj1, nsubj2))
+            if (aux and nsubj1 and nsubj2):
                 Qtype = "How many Xs VERB Y VERB"
-                relation = extractEntRel(token.head.head.text, result.noun_chunks)
-
-                entityLemmas = []
-
-                root = [token1 for token1 in result if token1.head == token1][0]
-                for child in root.children:
-
-                #
-                # for tok in result:
-                #     if to
-                #     print(root.text)
-                    if (tok.dep_ == 'nsubj') and (tok.head.dep_ == 'ROOT'):
-                        # for i in tok.head.children:
-                        #     print(i.text)
-                        if (len(list(tok.children)) > 0) and (list(tok.children)[0].dep_ == 'compound'):
-                            entityLemmas.append(list(tok.children)[0].lemma_)
-                        entityLemmas.append(tok.lemma_)
-                        break
-                entity = " ".join(entityLemmas)
                 break
 
         # Questions of the type What did ENTITY VERB?
@@ -209,20 +220,25 @@ def questionAnalysis(line):
                         entity.append(possible_verb.lemma_)
                         relation = token.head.lemma_
                         break
-
+                break
+        # else:
+        #     print(" NOTHING")
     if Qtype == None:
         raise Exception("Question type not recognised.")
 
+    # hardcoding things that won't get recognised
+    hardCodings = {
+        "is" : ["become", "be"],
+        "Nobel prize ID" : ["nobel prize", "nobel peace prize"]
+    }
+
+    # a little ratchet, but so so sweet.
+    for vals in hardCodings.values():
+        if (relation in vals):
+            relation = list(hardCodings.keys())[list(hardCodings.values()).index(vals)]
+
     print("relation: {}\nentity: {}\nentity2: {}\nQtype: {}\n-----------".format(
             relation, entity, entity2, Qtype))
-
-    # hardcoding things that won't get recognised
-    BElemmasToHardCode = [
-        "become", "be"
-    ]
-
-    if (relation in BElemmasToHardCode):
-        relation = "is"
 
     relationAPI = []
     entityAPI = []
@@ -235,26 +251,27 @@ def questionAnalysis(line):
     except Exception:
         raise Exception('Could not map relation.')
     else:
-        try: # attempt to map entity w/ wikiDataAPI()
+        try: # try mapping entity using API
             entityAPI = wikiDataAPI(entity, 'entity')
         except Exception:
-            raise Exception('Could not map entity using API.')
+            pass
 
-        try: # attempt to map entity w/ wikiDataQuery()
+        try: # try mapping entity using Query
             entityQuery = wikiDataQuery(entity)
         except Exception:
-            raise Exception('Could not map entity using Query.')
+            pass
+
+        # if both fail, raise exception.
+        if (not entityAPI) and (not entityQuery):
+            raise Exception('Could not map entity using API nor Query.')
 
     if entity2 is not None:
-        try: # attempt to map entity2 w/ wikiDataAPI()
+        try:
             entity2API = wikiDataAPI(entity2, 'entity')
-        except Exception:
-            raise Exception('Could not map entity2 using API.')
-
-        try: # attempt to map entity2 w/ wikiDataQuery()
             entity2Query = wikiDataQuery(entity2)
         except Exception:
-            raise Exception('Could not map entity2 using Query.')
+            if (not entity2API) and (not entity2Query):
+                raise Exception('Could not map entity2 using API nor Query.')
 
     values = {
         "relation" : relationAPI,
@@ -290,7 +307,6 @@ def createRelationQuery(relation, entity):
         }
     }
     '''
-
     return query
 
 # questions of type: How many things with relation X does Y have?
@@ -336,7 +352,7 @@ def runQuery(query):
 
     return data['results']['bindings']
 
-def printAns(results, values, Qtype, answerSpot):
+def validAns(results, values, Qtype, answerSpot):
     if (Qtype == "Is ENTITY a ENTITY") or (Qtype == "Did ENTITY1 RELATION ENTITY2"):
         for item in values['entity2']:
             for ans in results:
@@ -345,11 +361,6 @@ def printAns(results, values, Qtype, answerSpot):
                     return True
         return False
     else:
-        answ = []
-        for i in results:
-            answ.append(i[answerSpot]['value'])
-            # print(i[answerSpot]['value'], end=' ')
-        print(answ)
         return True
 
 def main(line):
@@ -358,6 +369,8 @@ def main(line):
     except Exception as e:
         traceback.print_exc()
     else:
+        results = []
+        answerSpot = None
         for combo in itertools.product(values['relation'], values['entity']):
             print("\ntrying combo: \nrel: {} - {} \nent: {} - {}".format(
                     combo[0]["id"], combo[0]["url"],
@@ -365,7 +378,7 @@ def main(line):
 
             query, answerSpot = queryType(combo, Qtype)
             results = runQuery(query)
-            ansGood = printAns(results, values, Qtype, answerSpot)
+            ansGood = validAns(results, values, Qtype, answerSpot)
 
             if (results and ansGood): # found good answer.
                 break
@@ -373,10 +386,15 @@ def main(line):
                 print("combo failed")
 
         # if no answer can be found, and have tried all combos
-        if (results is None):
+        if (not results):
             print("Answer not found.")
         elif (ansGood == False):
             print("No")
+        else:
+            answ = []
+            for i in results:
+                answ.append(i[answerSpot]['value'])
+            print(answ)
 
 if __name__ == '__main__':
     questions = {
@@ -384,8 +402,8 @@ if __name__ == '__main__':
         2: "What is the charge of an electron?",
         3: "Name all founders of the United Nations",
         4: "Is calculus a theory?",
-        5: "Is HTML a markup language?",
-        6: "Did Alexander Fleming invent penicillin?",
+        5: "Is HTML a markup language?", # Note: Only works with the large model
+        6: "Did Alexander Fleming invent penicillin?", # Note: also only works w/ large model
         7: "How many nobel prizes has Marie Curie won?",
         8: "What is the name of the biggest planet in our Solar system?",
         9: "When did Neil Armstrong die?",

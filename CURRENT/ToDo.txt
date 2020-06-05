@@ -5,12 +5,15 @@ Bugs:
 Improvements/Ideas:
 DONE  - Change try-catch block in questionAnalysis() so that it doesn't fail if just one thing goes wrong
     > multiple try-catch blocks, one for relation, one for entity, and last for entity2?
+  - Change wikiDataQuery() so that it can also search for realtions?
+    > make an extra arg that can either be a "Q" or a "P", then directly put that in the re srch string.
+  - Change extractRelEnt() to receive a token, and analyse its children for it's context?
 
 Need to Fix:
   Question Types:
-    - Did X VERB Y? (Yes/No question.) [Did Newton discover penicillin?]
+  DONE  - Did X VERB Y? (Yes/No question.) [Did Newton discover penicillin?]
       > Did X Z Y?
-      > Did X Y?
+      > Did X Y? Maybe not, I mean how do you find the answer to: Did Neil Armstrong die?
     - How many Xs VERB Y VERB? (count question) [How many nobel prizes has Marie Curie won?]
     - Biggest/Smallest questions???
     - When/What/Why/Who/Where did X Y? [When did Neil Armstrong die?]
