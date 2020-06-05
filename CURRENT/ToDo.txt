@@ -14,9 +14,14 @@ Need to Fix:
   DONE  - Did X VERB Y? (Yes/No question.) [Did Newton discover penicillin?]
       > Did X Z Y?
       > Did X Y? Maybe not, I mean how do you find the answer to: Did Neil Armstrong die?
-    - How many Xs VERB Y VERB? (count question) [How many nobel prizes has Marie Curie won?]
+  DONE  - How many Xs VERB Y VERB? (count question) [How many nobel prizes has Marie Curie won?]
     - Biggest/Smallest questions???
-    - When/What/Why/Who/Where did X Y? [When did Neil Armstrong die?]
+    - When/What/Who/Where did X Y? [When did Neil Armstrong die?]
+      > When : ADV, advmod
+      > What : PRON, dobj
+      > NOT Why.
+      > Who : PRON, dobj
+      > Where : ADV, advmod
     - Qualified statements questions [What is the temperature at THE CENTER of the sun]
 
 Notes:

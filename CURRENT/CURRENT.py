@@ -121,6 +121,7 @@ def questionAnalysis(line):
         entity2 = None
         Qtype = None
 
+        nsubj = aux = attr = advmod = dobj = False
         # print(token.text, token.lemma_, token.dep_, token.pos_, token.head.dep_)
         # What is the X of Y? type
         if token.dep_ == 'pobj':
@@ -133,22 +134,21 @@ def questionAnalysis(line):
                     entity = extractEntRel(token.text, result.noun_chunks)
                     break
 
-        # Questions of the type Who VERB SUBJ?
-        elif (token.dep_ == 'dobj'):
-            for othertoken in result:
-                if othertoken.pos_ == "PRON":
-                    Qtype = "What did ENTITY VERB"
-                    break
-            if Qtype == "What did ENTITY VERB":
-                if (token.head.dep_ == 'ROOT') and (token.head.pos_ == 'VERB'):
-                    Qtype = "Who VERB SUBJ"
-                    relation = token.head.text
-                    entity = token.text
-                    break
+        # # Questions of the type Who VERB SUBJ?
+        # elif (token.dep_ == 'dobj'):
+        #     for othertoken in result:
+        #         if othertoken.pos_ == "PRON":
+        #             Qtype = "What did ENTITY VERB"
+        #             break
+        #     if Qtype == "What did ENTITY VERB":
+        #         if (token.head.dep_ == 'ROOT') and (token.head.pos_ == 'VERB'):
+        #             Qtype = "Who VERB SUBJ"
+        #             relation = token.head.text
+        #             entity = token.text
+        #             break
 
         # Questions of the type Did ENTITY1 RELATION ENTITY2 (Yes/No)
         elif (token.lemma_ == 'do' and token.pos_ == 'AUX'): # token is starting "Did" ... .
-            nsubj = aux = dobj = False
             relation = token.lemma_
             root = [toks for toks in result if toks.head == toks][0]
             for child in root.children:
@@ -161,7 +161,7 @@ def questionAnalysis(line):
                     entity = extractEntRel(child.text, result.noun_chunks)
                     dobj = True
             # print("nsubj: {}, aux: {}, dobj: {}".format(nsubj, aux, dobj))
-            if (nsubj and aux and dobj):
+            if (nsubj and aux and dobj and (not attr) and (not advmod)):
                 Qtype = "Did ENTITY1 RELATION ENTITY2"
                 break
 
@@ -173,7 +173,6 @@ def questionAnalysis(line):
                     pron = False
                     break
             if (pron):
-                attr = nsubj = False
                 relation = token.lemma_
                 for child in token.children:
                     if (child.dep_ == 'nsubj'):
@@ -183,53 +182,56 @@ def questionAnalysis(line):
                         entity2 = extractEntRel(child.text, result.noun_chunks)
                         attr = True
                 # print("nsubj: {}, attr: {}".format(nsubj, attr))
-                if (nsubj and attr):
+                if (nsubj and attr and (not aux) and (not advmod) and (not dobj)):
                     Qtype = "Is ENTITY a ENTITY"
                     break
 
         # Questions of the type How many Xs VERB Y VERB?
         elif ((token.dep_ == 'ROOT') and (re.match(r'^how many', line, re.I) is not None)):
-            aux = nsubj1 = nsubj2 = False
+            nsubj2 = False
             for child in token.children:
                 if (child.dep_ == 'nsubj'):
                     entity = extractEntRel(child.text, result.noun_chunks)
-                    nsubj1 = True
+                    nsubj = True
                 elif (child.dep_ == 'aux'):
                     aux = True
                     childChild = [child for child in child.children if child.dep_ == 'nsubj'][0]
                     relation = extractEntRel(childChild.text, result.noun_chunks)
                     nsubj2 = True
-            print("aux: {} nsubj1: {} nsubj2: {}".format(aux, nsubj1, nsubj2))
-            if (aux and nsubj1 and nsubj2):
+            # print("aux: {} nsubj1: {} nsubj2: {}".format(aux, nsubj1, nsubj2))
+            if (aux and nsubj and nsubj2 and (not attr) and (not advmod) and (not dobj)):
                 Qtype = "How many Xs VERB Y VERB"
                 break
 
         # Questions of the type What did ENTITY VERB?
-        elif (token.pos_ == 'PROPN') and (token.head.dep_ == 'ROOT'):
-            for othertoken in result:
-                if othertoken.pos_ == "PRON":
-                    Qtype = "What did ENTITY VERB"
-                    break
-            if Qtype == "What did ENTITY VERB":
-                entity = []
-                for possible_subject in token.head.children:
-                    if (possible_subject.dep_ == 'nsubj') and (possible_subject.pos_ == "PROPN"):
-                        Qtype = "What did ENTITY VERB"
-                        if (possible_subject.children[0].pos_ == "PROPN"):
-                            entity.append(possible_subject.children[0].lemma_)
-                        entity.append(possible_verb.lemma_)
-                        relation = token.head.lemma_
-                        break
+        elif ((token.dep_ == 'ROOT') and (token.text == re.search(r'(\b\w+\b).?$', line, re.I).group(1))):
+            relation = token.lemma_
+            # relation = extractEntRel(token.text, result.noun_chunks)
+            for child in token.children:
+                if ((child.dep_ == 'advmod') or (child.dep_ == 'dobj' and child.pos_ == 'PRON')):
+                    advmod = True
+                    dobj = True
+                elif (child.dep_ == 'aux'):
+                    aux = True
+                elif (child.dep_ == 'nsubj'):
+                    entity = extractEntRel(child.text, result.noun_chunks)
+                    nsubj = True
+            # print("advmod: {} nsubj: {} aux: {}".format(advmod, nsubj, aux))
+            if ((advmod or dobj) and nsubj and aux and (not attr)):
+                Qtype = "What did ENTITY VERB"
                 break
         # else:
         #     print(" NOTHING")
+
     if Qtype == None:
         raise Exception("Question type not recognised.")
 
     # hardcoding things that won't get recognised
     hardCodings = {
         "is" : ["become", "be"],
-        "Nobel prize ID" : ["nobel prize", "nobel peace prize"]
+        "Nobel prize ID" : ["nobel prize", "nobel peace prize"],
+        "occupation" : ["do"]
+        # "educated at" : ["go school"]
     }
 
     # a little ratchet, but so so sweet.
