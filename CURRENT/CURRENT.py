@@ -425,6 +425,7 @@ if __name__ == '__main__':
     if (len(sys.argv) == 2) and (sys.argv[1].isdigit()):
         line = questions.get(int(sys.argv[1]))
         main(line)
+        
     elif (len(sys.argv) == 2):
         questionsFile = sys.argv[1]
         inputQuestions = {}
@@ -434,12 +435,13 @@ if __name__ == '__main__':
                 line = line.rstrip()
                 if not line: break
                 q = line.split("\t")
-                print(q)
+                # print(q)
                 inputQuestions[int(q[0])] = q[1]
 
         print("\n-- \tInput Questions\t --")
         for item in range(1, len(inputQuestions)+1):
             print(item, inputQuestions.get(item), sep='\t')
+
     else:
         print("\n-- \tType your question!\t --")
         for line in sys.stdin:
