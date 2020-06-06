@@ -110,7 +110,6 @@ def extractEntRel(text, noun_chunks):
 # Responsible for understanding the quesion type and mapping the entities/relations
 # found, to a wikidata Q-Number.
 def questionAnalysis(line):
-    nlp = spacy.load('en_core_web_lg')
     result = nlp(line)
 
     spacy.displacy.serve(result, style='dep')
@@ -148,9 +147,9 @@ def questionAnalysis(line):
         #             break
 
         # Questions of the type Did ENTITY1 RELATION ENTITY2 (Yes/No)
-        elif (token.lemma_ == 'do' and token.pos_ == 'AUX'): # token is starting "Did" ... .
-            relation = token.lemma_
+        elif (token.lemma_ == 'do' and (re.search(r'^(does|do|did)', line, re.I) is not None)): # token is starting w/ "Do" lemma ... .
             root = [toks for toks in result if toks.head == toks][0]
+            relation = root.lemma_
             for child in root.children:
                 if (child.dep_ == 'nsubj'):
                     entity2 = extractEntRel(child.text, result.noun_chunks)
@@ -230,8 +229,9 @@ def questionAnalysis(line):
     hardCodings = {
         "is" : ["become", "be"],
         "Nobel prize ID" : ["nobel prize", "nobel peace prize"],
-        "occupation" : ["do"]
-        # "educated at" : ["go school"]
+        "occupation" : ["do"],
+        "has part" : ["component", "part"]
+        # "educated at" : ["go school"] # doesn't work, will never match "go school."
     }
 
     # a little ratchet, but so so sweet.
@@ -359,7 +359,6 @@ def validAns(results, values, Qtype, answerSpot):
         for item in values['entity2']:
             for ans in results:
                 if ans['answer']['value'] == item['concepturi']:
-                    print("Yes")
                     return True
         return False
     else:
@@ -392,6 +391,8 @@ def main(line):
             print("Answer not found.")
         elif (ansGood == False):
             print("No")
+        elif (Qtype == "Is ENTITY a ENTITY") or (Qtype == "Did ENTITY1 RELATION ENTITY2"):
+            print("Yes")
         else:
             answ = []
             for i in results:
@@ -399,6 +400,9 @@ def main(line):
             print(answ)
 
 if __name__ == '__main__':
+    print("Loading model..")
+    nlp = spacy.load('en_core_web_lg')
+
     questions = {
         1: "What is the mass of the human brain?",
         2: "What is the charge of an electron?",
