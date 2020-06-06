@@ -378,6 +378,7 @@ def main(line):
                     combo[1]["id"], combo[1]["url"]))
 
             query, answerSpot = queryType(combo, Qtype)
+            print(query)
             results = runQuery(query)
             ansGood = validAns(results, values, Qtype, answerSpot)
 
@@ -401,7 +402,7 @@ def main(line):
 
 if __name__ == '__main__':
     print("Loading model..")
-    nlp = spacy.load('en_core_web_lg')
+    # nlp = spacy.load('en_core_web_lg')
 
     questions = {
         1: "What is the mass of the human brain?",
@@ -417,13 +418,28 @@ if __name__ == '__main__':
     }
 
     # print 10 example questions
-    print("-- \tExample Questions\t --")
+    print("\n-- \tExample Questions\t --")
     for item in range(1, len(questions)+1):
         print(item, questions.get(item), sep='\t')
 
     if (len(sys.argv) == 2) and (sys.argv[1].isdigit()):
         line = questions.get(int(sys.argv[1]))
         main(line)
+    elif (len(sys.argv) == 2):
+        questionsFile = sys.argv[1]
+        inputQuestions = {}
+        print("\n-- \tReading File {}\t --".format(questionsFile))
+        with open(questionsFile, 'r') as qFile:
+            for line in qFile:
+                line = line.rstrip()
+                if not line: break
+                q = line.split("\t")
+                print(q)
+                inputQuestions[int(q[0])] = q[1]
+
+        print("\n-- \tInput Questions\t --")
+        for item in range(1, len(inputQuestions)+1):
+            print(item, inputQuestions.get(item), sep='\t')
     else:
         print("\n-- \tType your question!\t --")
         for line in sys.stdin:
