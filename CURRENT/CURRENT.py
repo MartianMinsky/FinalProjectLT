@@ -11,8 +11,8 @@ import re
 import itertools
 import traceback
 
-API_RESULT_LEN = 3
-QUERY_RESULT_LEN = 3
+API_RESULT_LEN = 4
+QUERY_RESULT_LEN = 4
 
 # returns whole dictionary with all info
 def wikiDataAPI(item, type):
@@ -79,21 +79,24 @@ def wikiDataQuery(item):
     return results
 
 # Function used to accept strings as part of an entity(Ent) or a relation(Rel).
-def extractEntRel(text, noun_chunks):
+def extractEntRel(token, noun_chunks):
     acceptablePOS = [
         'NOUN', 'PROPN', 'ADJ', 'VERB', 'NUM'
     ]
 
     hardCodeRemovals = [
-        'how', 'many'
+        'many'
     ]
+
+    text = token.text
+    string = None
 
     stringLemmas = []
     for nounChunk in noun_chunks:
         # print(nounChunk.text)
         if text in nounChunk.text:
             for w in nounChunk:
-                if (w.text.lower() not in hardCodeRemovals) and (w.pos_ in acceptablePOS):
+                if (w.pos_ in acceptablePOS) and (w.lemma_ not in hardCodeRemovals):
                     stringLemmas.append(w.lemma_)
             string = " ".join(stringLemmas)
             break
@@ -105,7 +108,14 @@ def extractEntRel(text, noun_chunks):
     # string = " ".join(stringLemmas)
     # break
 
-    return string
+    # doesn't work, because if you give it root, it's gonna look at the whole sentence.
+    # for w in w.subtree:
+    #     if (W.pos_ in acceptablePOS):
+    #             stringLemmas.append(w.lemma_)
+    #     string = " ".join(stringLemmas)
+    #     break
+
+    return string if string is not None else token.lemma_
 
 # Responsible for understanding the quesion type and mapping the entities/relations
 # found, to a wikidata Q-Number.
@@ -120,7 +130,7 @@ def questionAnalysis(line):
         entity2 = None
         Qtype = None
 
-        nsubj = aux = attr = advmod = dobj = False
+        nsubj = nsubj2 = aux = pcomp = ccomp = attr = advmod = dobj = False
         # print(token.text, token.lemma_, token.dep_, token.pos_, token.head.dep_)
         # What is the X of Y? type
         if token.dep_ == 'pobj':
@@ -129,8 +139,8 @@ def questionAnalysis(line):
                                                 (token.head.head.dep_ == 'dobj')):
                 if (token.head.head.head.dep_ == 'ROOT'):
                     Qtype = "What is the X of Y"
-                    relation = extractEntRel(token.head.head.text, result.noun_chunks)
-                    entity = extractEntRel(token.text, result.noun_chunks)
+                    relation = extractEntRel(token.head.head, result.noun_chunks)
+                    entity = extractEntRel(token, result.noun_chunks)
                     break
 
         # # Questions of the type Who VERB SUBJ?
@@ -152,12 +162,12 @@ def questionAnalysis(line):
             relation = root.lemma_
             for child in root.children:
                 if (child.dep_ == 'nsubj'):
-                    entity2 = extractEntRel(child.text, result.noun_chunks)
+                    entity2 = extractEntRel(child, result.noun_chunks)
                     nsubj = True
                 elif (child.dep_ == 'aux'):
                     aux = True
                 elif (child.dep_ == 'dobj') or (child.dep_ == 'attr'):
-                    entity = extractEntRel(child.text, result.noun_chunks)
+                    entity = extractEntRel(child, result.noun_chunks)
                     dobj = True
             # print("nsubj: {}, aux: {}, dobj: {}".format(nsubj, aux, dobj))
             if (nsubj and aux and dobj and (not attr) and (not advmod)):
@@ -172,13 +182,13 @@ def questionAnalysis(line):
                     pron = False
                     break
             if (pron):
-                relation = token.lemma_
+                relation = token.lemma_ # should just be the "is"
                 for child in token.children:
                     if (child.dep_ == 'nsubj'):
-                        entity = extractEntRel(child.text, result.noun_chunks)
+                        entity = extractEntRel(child, result.noun_chunks)
                         nsubj = True
                     elif (child.dep_ == 'attr'):
-                        entity2 = extractEntRel(child.text, result.noun_chunks)
+                        entity2 = extractEntRel(child, result.noun_chunks)
                         attr = True
                 # print("nsubj: {}, attr: {}".format(nsubj, attr))
                 if (nsubj and attr and (not aux) and (not advmod) and (not dobj)):
@@ -188,24 +198,47 @@ def questionAnalysis(line):
         # Questions of the type How many Xs VERB Y VERB?
         elif ((token.dep_ == 'ROOT') and (re.match(r'^how many', line, re.I) is not None)):
             nsubj2 = False
-            for child in token.children:
-                if (child.dep_ == 'nsubj'):
-                    entity = extractEntRel(child.text, result.noun_chunks)
-                    nsubj = True
-                elif (child.dep_ == 'aux'):
-                    aux = True
-                    childChild = [child for child in child.children if child.dep_ == 'nsubj'][0]
-                    relation = extractEntRel(childChild.text, result.noun_chunks)
-                    nsubj2 = True
-            # print("aux: {} nsubj1: {} nsubj2: {}".format(aux, nsubj1, nsubj2))
-            if (aux and nsubj and nsubj2 and (not attr) and (not advmod) and (not dobj)):
+            if (token.text == re.search(r'(\b\w+\b).?$', line, re.I).group(1)):
+                print("yep")
+                for child in token.children:
+                    # How many ... has ... ROOT. or  How many ... did ... VERB
+                    if (child.dep_ == 'nsubj'):
+                        entity = extractEntRel(child, result.noun_chunks)
+                        nsubj2 = True
+                    elif (child.dep_ == 'dobj'):
+                        dobj = True
+                        relation = extractEntRel(child, result.noun_chunks)
+                    elif (child.dep_ == 'aux'):
+                        aux = True
+                        auxChildren = [child for child in child.children if child.dep_ == 'nsubj']
+                        if (not auxChildren):
+                            continue
+                        childChild = auxChildren[0]
+                        relation = extractEntRel(childChild, result.noun_chunks)
+                        nsubj = True
+            else:
+                for child in token.children:
+                    # received, root is has for some reason.
+                    if (child.dep_ == 'ccomp'):
+                        ccomp = True
+                        ccompChildren = [child for child in child.children if child.dep_ == 'nsubj']
+                        if (not ccompChildren):
+                            continue
+                        childChild = ccompChildren[0]
+                        entity = extractEntRel(childChild, result.noun_chunks)
+                        nsubj2 = True
+                    elif (child.dep_ == 'nsubj'):
+                        relation = extractEntRel(child, result.noun_chunks)
+                        nsubj = True
+            print("aux: {} dobj: {} nsubj: {} nsubj2: {}".format(aux, dobj, nsubj, nsubj2))
+            if ((nsubj2 and aux and (dobj or nsubj)) or (ccomp and nsubj and nsubj2)):
                 Qtype = "How many Xs VERB Y VERB"
                 break
 
         # Questions of the type What did ENTITY VERB?
         elif ((token.dep_ == 'ROOT') and (token.text == re.search(r'(\b\w+\b).?$', line, re.I).group(1))):
-            relation = token.lemma_
-            # relation = extractEntRel(token.text, result.noun_chunks)
+            # relation = token.lemma_
+            relation = extractEntRel(token, result.noun_chunks)
             for child in token.children:
                 if ((child.dep_ == 'advmod') or (child.dep_ == 'dobj' and child.pos_ == 'PRON')):
                     advmod = True
@@ -213,16 +246,57 @@ def questionAnalysis(line):
                 elif (child.dep_ == 'aux'):
                     aux = True
                 elif (child.dep_ == 'nsubj'):
-                    entity = extractEntRel(child.text, result.noun_chunks)
+                    entity = extractEntRel(child, result.noun_chunks)
                     nsubj = True
             # print("advmod: {} nsubj: {} aux: {}".format(advmod, nsubj, aux))
             if ((advmod or dobj) and nsubj and aux and (not attr)):
                 Qtype = "What did ENTITY VERB"
                 break
+
+        # Questions of the type: At what X did Y VERB?
+        elif ((token.dep_ == 'prep') and ('at' == re.search(r'^(\b\w+\b)', line, re.I).group(1).lower())):
+            prep = True
+            prepChildren = [child for child in token.children if child.dep_ == 'pcomp']
+            if (not prepChildren):
+                continue
+            childChild = prepChildren[0]
+            relation = extractEntRel(childChild, result.noun_chunks)
+            pcomp = True
+
+            root = [toks for toks in result if toks.head == toks][0]
+            for child in root.children:
+                if (child.dep_ == 'aux'):
+                    aux = True
+
+            for leftChld in root.lefts: pass
+            # entity = leftChld.lemma_
+            entity = extractEntRel(leftChld, result.noun_chunks)
+
+            if (prep and pcomp and aux):
+                Qtype = "At what X did Y VERB"
+                break
+
+        # Questions of the type: How X is Y?
+        elif ((token.dep_ == 'advmod') and ('how' == re.search(r'^(\b\w+\b)', line, re.I).group(1).lower())):
+            root = [toks for toks in result if toks.head == toks][0]
+            for child in root.children:
+                if (child.dep_ == 'nsubj'):
+                    nsubj = True
+                    entity = extractEntRel(child, result.noun_chunks)
+                    nsubjChildren = [child for child in root.children if (child.dep_ == 'acomp') or (child.dep_ == 'advmod')]
+                    if (not nsubjChildren):
+                        continue
+                    childChild = nsubjChildren[0]
+                    relation = extractEntRel(childChild, result.noun_chunks)
+                    advmod = True
+            if (nsubj and advmod):
+                Qtype = "How X is Y"
+                break
+
         # else:
         #     print(" NOTHING")
 
-    if Qtype == None:
+    if (Qtype == None):
         raise Exception("Question type not recognised.")
 
     # hardcoding things that won't get recognised
@@ -231,7 +305,10 @@ def questionAnalysis(line):
         "Nobel prize ID" : ["nobel prize", "nobel peace prize"],
         "occupation" : ["do"],
         "has part" : ["component", "part"],
-        "educated at" : ["study"]
+        "educated at" : ["study"],
+        "languages spoken, written or signed" : ["language", "speak"],
+        "size" : ["big", "small", "large"],
+        "distance" : ["far", "away"]
         # "educated at" : ["go school"] # doesn't work, will never match "go school."
     }
 
@@ -334,6 +411,8 @@ def queryType(combo, Qtype):
         "Did ENTITY1 RELATION ENTITY2" : (createRelationQuery(combo[0]['id'], combo[1]['id']), 'answerLabel'),
         "What did ENTITY VERB" : (createRelationQuery(combo[0]['id'], combo[1]['id']), 'answerLabel'),
         "Is ENTITY a ENTITY" : (createRelationQuery(combo[0]['id'], combo[1]['id']), 'answerLabel'),
+        "At what X did Y VERB" : (createRelationQuery(combo[0]['id'], combo[1]['id']), 'answerLabel'),
+        "How X is Y" : (createRelationQuery(combo[0]['id'], combo[1]['id']), 'answerLabel'),
         "How many Xs VERB Y VERB" : (createQuantityQuery(combo[0]['id'], combo[1]['id']), 'count')
     }
 
@@ -441,7 +520,7 @@ if __name__ == '__main__':
         2: "What is the charge of an electron?",
         3: "Name all founders of the United Nations",
         4: "Is calculus a theory?",
-        5: "Is HTML a markup language?", # Note: Only works with the large model
+        5: "At what speed does Jupiter move?",
         6: "Did Alexander Fleming invent penicillin?", # Note: also only works w/ large model
         7: "How many nobel prizes has Marie Curie won?",
         8: "What is the name of the biggest planet in our Solar system?",

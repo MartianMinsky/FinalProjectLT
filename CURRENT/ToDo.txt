@@ -8,22 +8,22 @@ DONE  - Change try-catch block in questionAnalysis() so that it doesn't fail if 
   - Change wikiDataQuery() so that it can also search for realtions?
     > make an extra arg that can either be a "Q" or a "P", then directly put that in the re srch string.
   - Change extractRelEnt() to receive a token, and analyse its children for it's context?
-  - Create a "Is ENTITY a ENTITY" hardCodings for the relation, so far should contain:
-    > [P31 (instance of), P279 (subclass of), P361 (part of), ??]
+
 Need to Fix:
+  - qN is not written to file, when there is an exception.  
   Question Types:
-  DONE  - Did X VERB Y? (Yes/No question.) [Did Newton discover penicillin?]
-      > Did X Z Y?
-      > Did X Y? Maybe not, I mean how do you find the answer to: Did Neil Armstrong die?
-  DONE  - How many Xs VERB Y VERB? (count question) [How many nobel prizes has Marie Curie won?]
-  DONE  - When/What/Who/Where did X Y? [When did Neil Armstrong die?]
-    DONE  > When : ADV, advmod
-    DONE  > What : PRON, dobj
-    DONE  > NOT Why.
-    DONE  > Who : PRON, dobj
-    DONE  > Where : ADV, advmod
     - Qualified statements questions [What is the temperature at THE CENTER of the sun]
+      > Don't know how to access them.
     - Biggest/Smallest questions???
+    - Create a "Is ENTITY a ENTITY" hardCodings for the relation, so far should contain:
+      > [P31 (instance of), P279 (subclass of), P361 (part of), ??]
+    - Bugs from Test questions:
+    DONE  1 At what speed does a photon move? > Not Recognised. implemented.
+    DONE  2 How big is the Milky Way? > implement. (need to match diameter with size, good luck with that one. counts as done. )
+    DONE  4 How many languages did Nikola Tesla speak? > small glitch, both a dobj and an aux.
+    \o/  5 Apollo 15 mission problem. > ??? extractRelEnt() is good, but wikidata can't match the 'mission' part.
+    WIP  6 Penicilin was discovered by whom? > Need to implement. (shit q btw. )
+      9 When was the Doppler effect discovered? > need to implement
 
 Notes:
 * Access id of a wikiDataAPI result with entity['id']
