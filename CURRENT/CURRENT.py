@@ -112,7 +112,7 @@ def extractEntRel(text, noun_chunks):
 def questionAnalysis(line):
     result = nlp(line)
 
-    spacy.displacy.serve(result, style='dep')
+    # spacy.displacy.serve(result, style='dep')
 
     for token in result:
         relation = None
@@ -230,7 +230,8 @@ def questionAnalysis(line):
         "is" : ["become", "be"],
         "Nobel prize ID" : ["nobel prize", "nobel peace prize"],
         "occupation" : ["do"],
-        "has part" : ["component", "part"]
+        "has part" : ["component", "part"],
+        "educated at" : ["study"]
         # "educated at" : ["go school"] # doesn't work, will never match "go school."
     }
 
@@ -296,6 +297,7 @@ def questionAnalysis(line):
             print("{} - {}".format(values["entity2"][k]["id"], values["entity2"][k]["url"]))
     else:
         print("None")
+    print("-----------")
 
     return values, Qtype
 
@@ -364,7 +366,47 @@ def validAns(results, values, Qtype, answerSpot):
     else:
         return True
 
-def main(line):
+def printAns(results, answerSpot, qN, Qtype, ansGood):
+    if (results and ansGood):
+        answ = []
+        for i in results:
+            answ.append(i[answerSpot]['value'])
+
+        print(qN, end='\t')
+        if (Qtype == "Is ENTITY a ENTITY") or (Qtype == "Did ENTITY1 RELATION ENTITY2"):
+            if (ansGood):
+                print("Yes", end='')
+            else:
+                print("No", end='')
+        else:
+            for element in answ:
+                print(element, end='\t')
+        print()
+    else:
+        print("Answer not found.")
+
+def writeAns(results, answerSpot, qN, Qtype, ansGood):
+    line = str(qN)
+    if (results):
+        answ = []
+        for i in results:
+            answ.append(i[answerSpot]['value'])
+
+        # format the line to be written to ansFile
+        if (Qtype == "Is ENTITY a ENTITY") or (Qtype == "Did ENTITY1 RELATION ENTITY2"):
+            if (ansGood):
+                line += ('\t' + "Yes")
+            else:
+                line += ('\t' + "No")
+        else:
+            for element in answ:
+                line += ("\t" + str(element))
+    line += '\n'
+
+    with open("answers.txt", 'a') as ansFile:
+        ansFile.write(line)
+
+def main(line, qN=1):
     try:
         values, Qtype = questionAnalysis(line)
     except Exception as e:
@@ -378,7 +420,6 @@ def main(line):
                     combo[1]["id"], combo[1]["url"]))
 
             query, answerSpot = queryType(combo, Qtype)
-            print(query)
             results = runQuery(query)
             ansGood = validAns(results, values, Qtype, answerSpot)
 
@@ -387,18 +428,9 @@ def main(line):
             else:
                 print("combo failed")
 
-        # if no answer can be found, and have tried all combos
-        if (not results):
-            print("Answer not found.")
-        elif (ansGood == False):
-            print("No")
-        elif (Qtype == "Is ENTITY a ENTITY") or (Qtype == "Did ENTITY1 RELATION ENTITY2"):
-            print("Yes")
-        else:
-            answ = []
-            for i in results:
-                answ.append(i[answerSpot]['value'])
-            print(answ)
+        # output
+        printAns(results, answerSpot, qN, Qtype, ansGood)
+        writeAns(results, answerSpot, qN, Qtype, ansGood)
 
 if __name__ == '__main__':
     print("Loading model..")
@@ -422,10 +454,12 @@ if __name__ == '__main__':
     for item in range(1, len(questions)+1):
         print(item, questions.get(item), sep='\t')
 
+    # allow args as numbers to reference a sample question
     if (len(sys.argv) == 2) and (sys.argv[1].isdigit()):
         line = questions.get(int(sys.argv[1]))
         main(line)
-        
+
+    # Read a file.
     elif (len(sys.argv) == 2):
         questionsFile = sys.argv[1]
         inputQuestions = {}
@@ -436,20 +470,30 @@ if __name__ == '__main__':
                 if not line: break
                 q = line.split("\t")
                 # print(q)
-                inputQuestions[int(q[0])] = q[1]
+                inputQuestions[int(q[0])] = str(q[1])
 
         print("\n-- \tInput Questions\t --")
         for item in range(1, len(inputQuestions)+1):
             print(item, inputQuestions.get(item), sep='\t')
 
+        # run every Question in the input file
+        for qN in inputQuestions:
+            Q = inputQuestions.get(qN)
+            print("\n-- \tAnswering Input Question:\t --")
+            print(qN, Q, sep='\t')
+            main(Q, qN)
+
+    # just read from stdin
     else:
         print("\n-- \tType your question!\t --")
+        qN = 0
         for line in sys.stdin:
             line = line.rstrip()
             if (line.isdigit() and (int(line) > 0 and int(line) <= 10)):
                 line = questions.get(int(line))
                 print(line)
+            qN += 1
 
-            main(line)
+            main(line, qN)
 
             print("-- \tType your question!\t --")
