@@ -402,7 +402,7 @@ def main(line):
 
 if __name__ == '__main__':
     print("Loading model..")
-    # nlp = spacy.load('en_core_web_lg')
+    nlp = spacy.load('en_core_web_lg')
 
     questions = {
         1: "What is the mass of the human brain?",
