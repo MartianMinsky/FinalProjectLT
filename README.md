@@ -6,3 +6,4 @@ Usage:
 	2. Can also take a number from stdin between 1-10 to again test one of the sample questions. 
 	3. Type a question to stdin. 
  
+	 4. Pass a file with ids and questions separated by a tab. 
