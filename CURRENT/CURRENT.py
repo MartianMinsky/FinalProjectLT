@@ -1,7 +1,10 @@
+DEBUG = 0
+
 #!/usr/bin/env python3
 '''
-By: Noam Zonca (s3482065),
-Email: n.zonca@student.rug.nl
+Team members:
+  Noam Zonca (s3482065), n.zonca@student.rug.nl
+  Winward Fang (s3205843), w.fang@student.rug.nl
 '''
 
 import sys
@@ -24,7 +27,7 @@ def wikiDataAPI(item, type):
     if (type == 'relation'):
         params['type'] = 'property'
 
-    params['search'] = item
+    params['search'] = item.rstrip()
     json = requests.get(url,params).json()
 
     if (not json['search']):
@@ -35,48 +38,6 @@ def wikiDataAPI(item, type):
         nRes = API_RESULT_LEN
 
     return json['search'][0:nRes]
-
-def wikiDataQuery(item):
-    query = '''
-    SELECT ?val1 WHERE {
-      ?val1 rdfs:label "''' + item + '''"@en.
-    }
-    '''
-    url = 'https://query.wikidata.org/sparql'
-
-    data = requests.get(url, params={'query': query, 'format':'json'}).json()
-
-    if (not data['results']['bindings']):
-        raise Exception('Did not find property or entity using rdfs:label!')
-    else:
-        if (len(data['results']['bindings']) < QUERY_RESULT_LEN):
-            nRes = len(data['results']['bindings'])
-        else:
-            nRes = QUERY_RESULT_LEN
-
-        results = []
-        for item in range(0, nRes):
-            uri = data['results']['bindings'][item]['val1']['value']
-
-            # only want the entity Q-number.
-            srch = re.search(r'Q\d+$', uri)
-            # avoids all matches for relations (P-values)
-            if (srch is not None):
-                id = srch.group()
-            else:
-                continue
-
-            result = {
-                'id': id,
-                'title': id,
-                'url': 'www.wikidata.org/wiki/' + id,
-                'concepturi': uri,
-                # 'label': ???,
-                # 'description': getDescription(id)
-            }
-            results.append(result)
-
-    return results
 
 # Function used to accept strings as part of an entity(Ent) or a relation(Rel).
 def extractEntRel(token, noun_chunks):
@@ -199,7 +160,6 @@ def questionAnalysis(line):
         elif ((token.dep_ == 'ROOT') and (re.match(r'^how many', line, re.I) is not None)):
             nsubj2 = False
             if (token.text == re.search(r'(\b\w+\b).?$', line, re.I).group(1)):
-                print("yep")
                 for child in token.children:
                     # How many ... has ... ROOT. or  How many ... did ... VERB
                     if (child.dep_ == 'nsubj'):
@@ -230,7 +190,7 @@ def questionAnalysis(line):
                     elif (child.dep_ == 'nsubj'):
                         relation = extractEntRel(child, result.noun_chunks)
                         nsubj = True
-            print("aux: {} dobj: {} nsubj: {} nsubj2: {}".format(aux, dobj, nsubj, nsubj2))
+            # print("aux: {} dobj: {} nsubj: {} nsubj2: {}".format(aux, dobj, nsubj, nsubj2))
             if ((nsubj2 and aux and (dobj or nsubj)) or (ccomp and nsubj and nsubj2)):
                 Qtype = "How many Xs VERB Y VERB"
                 break
@@ -316,15 +276,14 @@ def questionAnalysis(line):
     for vals in hardCodings.values():
         if (relation in vals):
             relation = list(hardCodings.keys())[list(hardCodings.values()).index(vals)]
-
-    print("relation: {}\nentity: {}\nentity2: {}\nQtype: {}\n-----------".format(
-            relation, entity, entity2, Qtype))
+    
+    if DEBUG:
+      print("relation: {}\nentity: {}\nentity2: {}\nQtype: {}\n-----------".format(
+              relation, entity, entity2, Qtype))
 
     relationAPI = []
     entityAPI = []
-    entityQuery = []
     entity2API = []
-    entity2Query = []
 
     try: # attempt to map relation.
         relationAPI = wikiDataAPI(relation, 'relation')
@@ -336,45 +295,36 @@ def questionAnalysis(line):
         except Exception:
             pass
 
-        try: # try mapping entity using Query
-            entityQuery = wikiDataQuery(entity)
-        except Exception:
-            pass
-
-        # if both fail, raise exception.
-        if (not entityAPI) and (not entityQuery):
-            raise Exception('Could not map entity using API nor Query.')
-
     if entity2 is not None:
         try:
             entity2API = wikiDataAPI(entity2, 'entity')
-            entity2Query = wikiDataQuery(entity2)
         except Exception:
-            if (not entity2API) and (not entity2Query):
+            if not entity2API:
                 raise Exception('Could not map entity2 using API nor Query.')
 
     values = {
         "relation" : relationAPI,
-        "entity" : entityAPI + entityQuery,
-        "entity2" : entity2API + entity2Query if (entity2 is not None) else None
+        "entity" : entityAPI,
+        "entity2" : entity2API if (entity2 is not None) else None
     }
+    
+    if DEBUG:
+      print("values:")
+      print("rel:")
+      for i in range(0, len(values["relation"])):
+          print("{} - {}".format(values["relation"][i]["id"], values["relation"][i]["url"]))
 
-    print("values:")
-    print("rel:")
-    for i in range(0, len(values["relation"])):
-        print("{} - {}".format(values["relation"][i]["id"], values["relation"][i]["url"]))
+      print("ent:")
+      for j in range(0, len(values["entity"])):
+          print("{} - {}".format(values["entity"][j]["id"], values["entity"][j]["url"]))
 
-    print("ent:")
-    for j in range(0, len(values["entity"])):
-        print("{} - {}".format(values["entity"][j]["id"], values["entity"][j]["url"]))
-
-    print("ent2:")
-    if (entity2 is not None):
-        for k in range(0, len(values["entity2"])):
-            print("{} - {}".format(values["entity2"][k]["id"], values["entity2"][k]["url"]))
-    else:
-        print("None")
-    print("-----------")
+      print("ent2:")
+      if (entity2 is not None):
+          for k in range(0, len(values["entity2"])):
+              print("{} - {}".format(values["entity2"][k]["id"], values["entity2"][k]["url"]))
+      else:
+          print("None")
+      print("-----------")
 
     return values, Qtype
 
@@ -494,9 +444,10 @@ def main(line, qN=1):
         results = []
         answerSpot = None
         for combo in itertools.product(values['relation'], values['entity']):
-            print("\ntrying combo: \nrel: {} - {} \nent: {} - {}".format(
-                    combo[0]["id"], combo[0]["url"],
-                    combo[1]["id"], combo[1]["url"]))
+            if DEBUG:
+              print("\ntrying combo: \nrel: {} - {} \nent: {} - {}".format(
+                      combo[0]["id"], combo[0]["url"],
+                      combo[1]["id"], combo[1]["url"]))
 
             query, answerSpot = queryType(combo, Qtype)
             results = runQuery(query)
@@ -504,7 +455,7 @@ def main(line, qN=1):
 
             if (results and ansGood): # found good answer.
                 break
-            else:
+            elif DEBUG:
                 print("combo failed")
 
         # output
@@ -513,7 +464,10 @@ def main(line, qN=1):
 
 if __name__ == '__main__':
     print("Loading model..")
-    nlp = spacy.load('en_core_web_lg')
+    if DEBUG:
+      nlp = spacy.load('en_core_web_sm')
+    else:
+      nlp = spacy.load('en_core_web_lg')
 
     questions = {
         1: "What is the mass of the human brain?",
@@ -533,6 +487,7 @@ if __name__ == '__main__':
     for item in range(1, len(questions)+1):
         print(item, questions.get(item), sep='\t')
 
+    open("answers.txt", 'w').close()
     # allow args as numbers to reference a sample question
     if (len(sys.argv) == 2) and (sys.argv[1].isdigit()):
         line = questions.get(int(sys.argv[1]))
@@ -549,11 +504,12 @@ if __name__ == '__main__':
                 if not line: break
                 q = line.split("\t")
                 # print(q)
-                inputQuestions[int(q[0])] = str(q[1])
+                inputQuestions[q[0]] = q[1]
 
         print("\n-- \tInput Questions\t --")
-        for item in range(1, len(inputQuestions)+1):
-            print(item, inputQuestions.get(item), sep='\t')
+        for qN in inputQuestions:
+            Q = inputQuestions.get(qN)
+            print(qN, Q, sep='\t')
 
         # run every Question in the input file
         for qN in inputQuestions:
@@ -565,14 +521,15 @@ if __name__ == '__main__':
     # just read from stdin
     else:
         print("\n-- \tType your question!\t --")
-        qN = 0
+        qN = 1
         for line in sys.stdin:
             line = line.rstrip()
+            
+            # line is a digit corresponding to one of the example questions
             if (line.isdigit() and (int(line) > 0 and int(line) <= 10)):
                 line = questions.get(int(line))
                 print(line)
-            qN += 1
 
             main(line, qN)
-
+            qN += 1
             print("-- \tType your question!\t --")
