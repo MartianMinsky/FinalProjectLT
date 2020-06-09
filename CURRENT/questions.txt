@@ -1,0 +1,10 @@
+1	What is the mass of the human brain?
+2	What is the charge of an electron?
+3	Name all founders of the United Nations
+4	Is calculus a theory?
+5	At what speed does Jupiter move?
+6	Did Alexander Fleming invent penicillin?
+7	How many nobel prizes has Marie Curie won?
+8	What is the name of the biggest planet in our Solar system?
+9	When did Neil Armstrong die?
+10	What is the temperature at the center of the Sun?
