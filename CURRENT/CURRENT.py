@@ -1,11 +1,11 @@
-DEBUG = 0
-
 #!/usr/bin/env python3
 '''
 Team members:
   Noam Zonca (s3482065), n.zonca@student.rug.nl
   Winward Fang (s3205843), w.fang@student.rug.nl
 '''
+
+DEBUG = 0
 
 import sys
 import requests
@@ -62,20 +62,6 @@ def extractEntRel(token, noun_chunks):
             string = " ".join(stringLemmas)
             break
 
-    # NEED list acceptableDEP
-    # for child in token.children:
-    #     if (child.pos_ in acceptablePOS):
-    #         stringLemmas.append(w.lemma_)
-    # string = " ".join(stringLemmas)
-    # break
-
-    # doesn't work, because if you give it root, it's gonna look at the whole sentence.
-    # for w in w.subtree:
-    #     if (W.pos_ in acceptablePOS):
-    #             stringLemmas.append(w.lemma_)
-    #     string = " ".join(stringLemmas)
-    #     break
-
     return string if string is not None else token.lemma_
 
 # Responsible for understanding the quesion type and mapping the entities/relations
@@ -92,7 +78,7 @@ def questionAnalysis(line):
         Qtype = None
 
         nsubj = nsubj2 = aux = pcomp = ccomp = attr = advmod = dobj = False
-        # print(token.text, token.lemma_, token.dep_, token.pos_, token.head.dep_)
+
         # What is the X of Y? type
         if token.dep_ == 'pobj':
             if (token.head.dep_ == 'prep') and ((token.head.head.dep_ == 'nsubj') or
@@ -197,7 +183,6 @@ def questionAnalysis(line):
 
         # Questions of the type What did ENTITY VERB?
         elif ((token.dep_ == 'ROOT') and (token.text == re.search(r'(\b\w+\b).?$', line, re.I).group(1))):
-            # relation = token.lemma_
             relation = extractEntRel(token, result.noun_chunks)
             for child in token.children:
                 if ((child.dep_ == 'advmod') or (child.dep_ == 'dobj' and child.pos_ == 'PRON')):
@@ -229,7 +214,6 @@ def questionAnalysis(line):
                     aux = True
 
             for leftChld in root.lefts: pass
-            # entity = leftChld.lemma_
             entity = extractEntRel(leftChld, result.noun_chunks)
 
             if (prep and pcomp and aux):
@@ -253,9 +237,6 @@ def questionAnalysis(line):
                 Qtype = "How X is Y"
                 break
 
-        # else:
-        #     print(" NOTHING")
-
     if (Qtype == None):
         raise Exception("Question type not recognised.")
 
@@ -269,14 +250,13 @@ def questionAnalysis(line):
         "languages spoken, written or signed" : ["language", "speak"],
         "size" : ["big", "small", "large"],
         "distance" : ["far", "away"]
-        # "educated at" : ["go school"] # doesn't work, will never match "go school."
     }
 
     # a little ratchet, but so so sweet.
     for vals in hardCodings.values():
         if (relation in vals):
             relation = list(hardCodings.keys())[list(hardCodings.values()).index(vals)]
-    
+
     if DEBUG:
       print("relation: {}\nentity: {}\nentity2: {}\nQtype: {}\n-----------".format(
               relation, entity, entity2, Qtype))
@@ -307,24 +287,25 @@ def questionAnalysis(line):
         "entity" : entityAPI,
         "entity2" : entity2API if (entity2 is not None) else None
     }
-    
+
     if DEBUG:
       print("values:")
-      print("rel:")
-      for i in range(0, len(values["relation"])):
-          print("{} - {}".format(values["relation"][i]["id"], values["relation"][i]["url"]))
+     if DEBUG:
+          print("rel:")
+          for i in range(0, len(values["relation"])):
+              print("{} - {}".format(values["relation"][i]["id"], values["relation"][i]["url"]))
 
-      print("ent:")
-      for j in range(0, len(values["entity"])):
-          print("{} - {}".format(values["entity"][j]["id"], values["entity"][j]["url"]))
+          print("ent:")
+          for j in range(0, len(values["entity"])):
+              print("{} - {}".format(values["entity"][j]["id"], values["entity"][j]["url"]))
 
-      print("ent2:")
-      if (entity2 is not None):
-          for k in range(0, len(values["entity2"])):
-              print("{} - {}".format(values["entity2"][k]["id"], values["entity2"][k]["url"]))
-      else:
-          print("None")
-      print("-----------")
+          print("ent2:")
+          if (entity2 is not None):
+              for k in range(0, len(values["entity2"])):
+                  print("{} - {}".format(values["entity2"][k]["id"], values["entity2"][k]["url"]))
+          else:
+              print("None")
+          print("-----------")
 
     return values, Qtype
 
@@ -380,8 +361,6 @@ def runQuery(query):
         print("Could not run query:")
         traceback.print_exc()
         return
-
-    # print("data:", data['results']['bindings'], sep='\n')
 
     return data['results']['bindings']
 
@@ -524,7 +503,7 @@ if __name__ == '__main__':
         qN = 1
         for line in sys.stdin:
             line = line.rstrip()
-            
+
             # line is a digit corresponding to one of the example questions
             if (line.isdigit() and (int(line) > 0 and int(line) <= 10)):
                 line = questions.get(int(line))
